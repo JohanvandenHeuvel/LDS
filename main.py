@@ -7,6 +7,7 @@ from lds import (
     info_observation_params,
     info_kalman_filter,
     info_kalman_smoothing,
+    info_sample_backward,
     sample_forward_messages,
     sample_backward_messages,
 )
@@ -39,11 +40,19 @@ if __name__ == "__main__":
 
     forward_samples = sample_forward_messages(forward_messages)
     backward_samples = sample_backward_messages(backward_messages)
+    samples = info_sample_backward(forward_messages, pair_params=(J11, J12, J22))
 
-    plt.plot(latents.detach().numpy(), label="observed")
+    plt.plot(latents.detach().numpy(), label="true")
     plt.plot(forward_samples, label="predicted")
     plt.plot(backward_samples, label="smoothed")
     plt.legend()
-    plt.xlabel("x1")
-    plt.ylabel("x2")
+    plt.xlabel("time")
+    plt.ylabel("latent x")
+    plt.show()
+
+    plt.plot(obs.detach().numpy(), label="observed")
+    plt.plot(samples, label="sampled")
+    plt.legend()
+    plt.xlabel("time")
+    plt.ylabel("obs y")
     plt.show()

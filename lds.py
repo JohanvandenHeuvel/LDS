@@ -1,10 +1,16 @@
 import torch
 
-from distributions.gaussian import info_to_standard
+from distributions.gaussian import info_to_standard, Gaussian, info_to_natural
 
 
 def info_condition(J, h, J_obs, h_obs):
     return J + J_obs, h + h_obs
+
+
+def condition(J, h, y, Jxx, Jxy):
+    J_cond = J + Jxx
+    h_cond = h + (Jxy @ y.T).T
+    return J_cond, h_cond
 
 
 def info_marginalize(J11, J12, J22, h):
@@ -62,6 +68,26 @@ def info_kalman_smoothing(forward_messages, pair_params):
         backward_messages.append((J_smooth, h_smooth))
 
     return list(reversed(backward_messages))
+
+
+def info_sample_backward(forward_messages, pair_params):
+    J11, J12, _ = pair_params
+
+    _, (J_pred, h_pred) = forward_messages[-1]
+    next_sample = Gaussian(info_to_natural(J_pred, h_pred)).rsample()
+
+    samples = [next_sample]
+    for _, (J_pred, h_pred) in reversed(forward_messages[:-1]):
+
+        J = J_pred + J11
+        h = h_pred - next_sample @ J12
+
+        # get the sample
+        state = Gaussian(info_to_natural(J, h.squeeze(0)))
+        next_sample = state.rsample()
+        samples.append(next_sample)
+
+    return list(reversed(samples))
 
 
 def info_observation_params(obs, C, R):
