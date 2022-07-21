@@ -1,13 +1,14 @@
-from typing import Tuple
+import warnings
 
+import matplotlib.pyplot as plt
 import numpy as np
 import torch
-from torch import Tensor
-import matplotlib.pyplot as plt
 
 from data import generate_data
+from distributions import NormalInverseWishart, MatrixNormalInverseWishart
+from distributions.gaussian import natural_to_info
+from global_param import initialize_global_lds_parameters, natural_gradient, gradient_descent
 from lds import (
-    info_pair_params,
     info_observation_params,
     info_kalman_filter,
     info_kalman_smoothing,
@@ -15,21 +16,9 @@ from lds import (
     sample_forward_messages,
     sample_backward_messages,
 )
-from distributions import NormalInverseWishart, MatrixNormalInverseWishart
-from distributions.gaussian import natural_to_info, info_to_standard
-from global_param import initialize_global_lds_parameters, natural_gradient
-
-import warnings
 
 warnings.simplefilter(action="ignore", category=FutureWarning)
 warnings.simplefilter(action="ignore", category=np.VisibleDeprecationWarning)
-
-
-def gradient_descent(w, grad_w, step_size):
-    if not isinstance(w, Tensor):
-        return [gradient_descent(w[i], grad_w[i], step_size) for i in range(len(w))]
-    return w - step_size * grad_w
-
 
 if __name__ == "__main__":
     latents, obs = generate_data(100, noise_scale=1)
@@ -63,8 +52,6 @@ if __name__ == "__main__":
         # init_params = (torch.inverse(Q), torch.zeros(1))
         init_params = natural_to_info(NormalInverseWishart(niw_param).expected_stats())
 
-
-
         forward_messages = info_kalman_filter(
             init_params=init_params, pair_params=(J11, J12, J22), observations=y
         )
@@ -77,13 +64,8 @@ if __name__ == "__main__":
         backward_samples = sample_backward_messages(backward_messages)
         samples = info_sample_backward(forward_messages, pair_params=(J11, J12, J22))
 
+        # plot
         if i % max((n_iter // 10), 1) == 0 or i == 0:
-            # init update
-            # J, h = init_params
-            # scale = 1 / J
-            # loc = scale * h
-            # print(abs(obs[0].item() - loc.item()))
-
             fig, ax = plt.subplots(1, 2)
 
             ax1 = ax[0]
@@ -104,6 +86,7 @@ if __name__ == "__main__":
             plt.tight_layout()
             plt.show()
 
+        # update global param
         nat_grad_init = natural_gradient(
             E_init_stats, niw_param, niw_prior, len(obs), 1
         )
@@ -114,6 +97,4 @@ if __name__ == "__main__":
         nat_grad_pair = natural_gradient(
             E_pair_stats, mniw_param, mniw_prior, len(obs), 1
         )
-        mniw_param = gradient_descent(
-            mniw_param, nat_grad_pair, step_size=1e-2
-        )
+        mniw_param = gradient_descent(mniw_param, nat_grad_pair, step_size=1e-2)

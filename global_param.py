@@ -1,6 +1,7 @@
 from typing import Tuple
 
 import torch
+from torch import Tensor
 
 from distributions import NormalInverseWishart, MatrixNormalInverseWishart
 
@@ -57,3 +58,9 @@ def natural_gradient(
         value.append(nat_grad(eta_theta_prior[i], eta_theta[i], stats[i]))
 
     return value
+
+
+def gradient_descent(w, grad_w, step_size):
+    if not isinstance(w, Tensor):
+        return [gradient_descent(w[i], grad_w[i], step_size) for i in range(len(w))]
+    return w - step_size * grad_w
