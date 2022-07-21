@@ -49,16 +49,11 @@ def natural_gradient(
         Number of batches in the data.
     """
 
-    def nat_grad(prior, posterior, s) -> torch.Tensor:
-        # if isinstance(prior, Tuple):
-        #     return [
-        #         -1.0 / N * prior[j] - posterior[j] + num_batches * s[j]
-        #         for j in range(len(prior))
-        #     ]
+    def nat_grad(prior, posterior, s):
         return -1.0 / N * (prior - posterior + num_batches * s)
 
-    value = [
-        nat_grad(eta_theta_prior[i], eta_theta[i], stats[i])
-        for i in range(len(eta_theta))
-    ]
+    value = []
+    for i in range(len(eta_theta)):
+        value.append(nat_grad(eta_theta_prior[i], eta_theta[i], stats[i]))
+
     return value
