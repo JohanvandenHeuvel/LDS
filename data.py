@@ -12,7 +12,7 @@ R = torch.diag(torch.ones(1))
 
 def generate_data(n, noise_scale=1e-1):
     init_params = standard_to_natural(
-        loc=torch.zeros(1).unsqueeze(0),
+        loc=torch.ones(1).unsqueeze(0) * 4,
         scale=torch.diag(torch.ones(1) * noise_scale).unsqueeze(0),
     )
     x_1 = Gaussian(nat_param=init_params).rsample()

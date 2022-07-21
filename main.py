@@ -1,3 +1,6 @@
+from typing import Tuple
+
+import numpy as np
 import torch
 import matplotlib.pyplot as plt
 
@@ -12,14 +15,27 @@ from lds import (
     sample_backward_messages,
 )
 from distributions import NormalInverseWishart, MatrixNormalInverseWishart
-from distributions.gaussian import natural_to_info
-from global_param import initialize_global_lds_parameters
+from distributions.gaussian import natural_to_info, info_to_standard
+from global_param import initialize_global_lds_parameters, natural_gradient
+
+import warnings
+
+warnings.simplefilter(action="ignore", category=FutureWarning)
+warnings.simplefilter(action="ignore", category=np.VisibleDeprecationWarning)
+
+
+def gradient_descent(w, grad_w, step_size):
+    # if isinstance(w, Tuple):
+    #     return [w[i] - step_size * grad_w[i] for i in range(len(w))]
+    return w - step_size * grad_w
+
 
 if __name__ == "__main__":
     latents, obs = generate_data(100, noise_scale=1)
 
     obs = obs.unsqueeze(1)
 
+    niw_prior, mniw_prior = initialize_global_lds_parameters(1)
     niw_param, mniw_param = initialize_global_lds_parameters(1)
 
     D_latent = latents.shape[-1]
@@ -31,7 +47,8 @@ if __name__ == "__main__":
     R = torch.diag(torch.ones(1))
 
     # optimize prior
-    for i in range(10):
+    n_iter = 1000
+    for i in range(n_iter):
 
         # J11, J12, J22 = info_pair_params(A, Q)
         J11, J12, J22, _ = MatrixNormalInverseWishart(mniw_param).expected_stats()
@@ -44,32 +61,47 @@ if __name__ == "__main__":
         # init_params = (torch.inverse(Q), torch.zeros(1))
         init_params = natural_to_info(NormalInverseWishart(niw_param).expected_stats())
 
+        J, h = init_params
+        scale = 1 / J
+        loc = scale * h
+        # print(loc, scale)
+        if i % max((n_iter // 10), 1) == 0 or i == 0:
+            print(abs(obs[0].item() - loc.item()))
+
         forward_messages = info_kalman_filter(
             init_params=init_params, pair_params=(J11, J12, J22), observations=y
         )
         backward_messages, expected_stats = info_kalman_smoothing(
             forward_messages, pair_params=(J11, J12, J22)
         )
+        E_init_stats, E_pair_stats, _ = expected_stats
 
         forward_samples = sample_forward_messages(forward_messages)
         backward_samples = sample_backward_messages(backward_messages)
         samples = info_sample_backward(forward_messages, pair_params=(J11, J12, J22))
 
-        fig, ax = plt.subplots(1, 2)
+        # fig, ax = plt.subplots(1, 2)
+        #
+        # ax1 = ax[0]
+        # ax1.plot(latents.detach().numpy(), label="true")
+        # ax1.plot(forward_samples, label="predicted")
+        # ax1.plot(backward_samples, label="smoothed")
+        # ax1.legend()
+        # ax1.set_xlabel("time")
+        # ax1.set_ylabel("latent x")
+        #
+        # ax2 = ax[1]
+        # ax2.plot(obs.detach().numpy(), label="observed")
+        # ax2.plot(samples, label="sampled")
+        # ax2.legend()
+        # ax2.set_xlabel("time")
+        # ax2.set_ylabel("obs y")
+        #
+        # plt.show()
 
-        ax1 = ax[0]
-        ax1.plot(latents.detach().numpy(), label="true")
-        ax1.plot(forward_samples, label="predicted")
-        ax1.plot(backward_samples, label="smoothed")
-        ax1.legend()
-        ax1.set_xlabel("time")
-        ax1.set_ylabel("latent x")
-
-        ax2 = ax[1]
-        ax2.plot(obs.detach().numpy(), label="observed")
-        ax2.plot(samples, label="sampled")
-        ax2.legend()
-        ax2.set_xlabel("time")
-        ax2.set_ylabel("obs y")
-
-        plt.show()
+        nat_grad_init = natural_gradient(
+            E_init_stats, niw_param, niw_prior, len(obs), 1
+        )
+        niw_param = gradient_descent(
+            niw_param, torch.stack(nat_grad_init), step_size=1e-1
+        )
