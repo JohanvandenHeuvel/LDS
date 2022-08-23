@@ -90,6 +90,7 @@ if __name__ == "__main__":
                 ax2.set_xlabel("time")
                 ax2.set_ylabel("obs y")
 
+            plt.suptitle(f"iteration {i}")
             plt.tight_layout()
             plt.show()
 
