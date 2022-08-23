@@ -42,7 +42,7 @@ if __name__ == "__main__":
     n_iter = 1000
     for i in range(n_iter):
         # J11, J12, J22 = info_pair_params(A, Q)
-        J11, J12, J22, _ = MatrixNormalInverseWishart(mniw_param).expected_stats()
+        J22, J12, J11, _ = MatrixNormalInverseWishart(mniw_param).expected_stats()
         J11 *= -2
         J12 *= -1
         J22 *= -2
