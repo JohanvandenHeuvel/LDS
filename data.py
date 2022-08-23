@@ -9,7 +9,6 @@ def rot(theta):
 
 
 def generate_data(A, Q, C, R, T):
-
     P, N = C.shape
 
     x = [torch.randn(N)]
@@ -25,17 +24,21 @@ def generate_data(A, Q, C, R, T):
     return x, y
 
 
-if __name__ == "__main__":
-
+def data_params():
     # size parameters
     N = 2
-    T = 900
 
     A = 0.999 * rot(torch.tensor(2 * torch.pi / 30))
     Q = 0.1 * torch.eye(N)
     C = torch.eye(N)
     R = 0.0001 * torch.eye(N)
 
+    return A, Q, C, R
+
+
+if __name__ == "__main__":
+    T = 900
+    A, Q, C, R = data_params()
     x, y = generate_data(A, Q, C, R, T)
 
     plt.plot(x.detach().numpy())

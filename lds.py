@@ -1,15 +1,29 @@
 import torch
 import numpy as np
 
-from distributions.gaussian import info_to_standard, Gaussian, info_to_natural
+from dense import pack_dense
+from distributions import MatrixNormalInverseWishart, NormalInverseWishart
+
+from distributions.gaussian import (
+    info_to_standard,
+    Gaussian,
+    info_to_natural,
+    natural_to_info,
+)
+from global_param import natural_gradient, gradient_descent
 
 
 def outer_product(x, y):
-    # computes xyT
+    """
+    Computes xy^T .
+    """
     return torch.einsum("i, j -> ij", (x, y))
 
 
 def info_condition(J, h, J_obs, h_obs):
+    """
+    Conditions distribution with parameters (J, h) on observation with parameters (J_obs, h_obs).
+    """
     return J + J_obs, h + h_obs
 
 
@@ -125,7 +139,6 @@ def info_sample_backward(forward_messages, pair_params):
 
     samples = [next_sample]
     for _, (J_pred, h_pred) in reversed(forward_messages[:-1]):
-
         J = J_pred + J11
         h = h_pred - next_sample @ J12
 
@@ -137,7 +150,10 @@ def info_sample_backward(forward_messages, pair_params):
     return torch.stack(list(reversed(samples)))
 
 
-def info_observation_params(obs, C, R):
+def info_observation_params(obs, C, R, zero=None):
+    """
+    Transform observations to information parameter form.
+    """
     R_inv = torch.inverse(R)
     R_inv_C = R_inv @ C
 
@@ -147,6 +163,12 @@ def info_observation_params(obs, C, R):
     h_obs = obs @ R_inv_C
 
     J_obs = J_obs.unsqueeze(0).repeat(len(obs), 1, 1)
+
+    # zero out a part of the data (for prediction purposes)
+    if zero is not None:
+        h_obs[zero[0] : zero[1]] = 0
+        J_obs[zero[0] : zero[1]] = 0
+
     return zip(J_obs, h_obs.squeeze())
 
 
@@ -173,3 +195,55 @@ def sample_backward_messages(messages):
         x = loc + scale @ torch.randn(len(scale))
         samples.append(x.detach().numpy())
     return np.stack(samples)
+
+
+def run_iter(y, param, param_prior):
+    """
+    Run single iteration for main loop.
+    """
+    niw_prior, mniw_prior = param_prior
+    niw_param, mniw_param = param
+
+    """
+    Transition prior
+    """
+    # J11, J12, J22 = info_pair_params(A, Q)
+    J22, J12, J11, _ = MatrixNormalInverseWishart(mniw_param).expected_stats()
+    J11 = -2 * J11
+    J12 = -1 * J12.T
+    J22 = -2 * J22
+
+    """
+    Initial state prior
+    """
+    # init_params = (torch.inverse(Q), torch.zeros(1))
+    init_params = natural_to_info(NormalInverseWishart(niw_param).expected_stats())
+
+    """
+    Kalman filtering and smoothing 
+    """
+    forward_messages = info_kalman_filter(
+        init_params=init_params, pair_params=(J11, J12, J22), observations=y
+    )
+    backward_messages, expected_stats = info_kalman_smoothing(
+        forward_messages, pair_params=(J11, J12, J22)
+    )
+    E_init_stats, E_pair_stats, _ = expected_stats
+
+    # forward_samples = sample_forward_messages(forward_messages)
+    # backward_samples = sample_backward_messages(backward_messages)
+    samples = info_sample_backward(forward_messages, pair_params=(J11, J12, J22))
+
+    """
+    Update global parameters  
+    """
+    T = len(samples)
+    nat_grad_init = natural_gradient(
+        pack_dense(*E_init_stats), niw_param, niw_prior, T, 1
+    )
+    niw_param = gradient_descent(niw_param, torch.stack(nat_grad_init), step_size=1e-1)
+
+    nat_grad_pair = natural_gradient(E_pair_stats, mniw_param, mniw_prior, T, 1)
+    mniw_param = gradient_descent(mniw_param, nat_grad_pair, step_size=1e-2)
+
+    return niw_param, mniw_param, samples

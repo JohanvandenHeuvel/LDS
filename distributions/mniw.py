@@ -4,6 +4,8 @@ from distributions.distribution import ExpDistribution
 
 from .niw import multidigamma
 
+from scipy.stats import invwishart, matrix_normal
+
 
 def symmetrize(A):
     return (A + A.T) / 2.0
@@ -11,6 +13,14 @@ def symmetrize(A):
 
 def is_posdef(A):
     return torch.allclose(A, A.T) and torch.all(torch.linalg.eigvalsh(A) > 0.0)
+
+
+def sample(M, K, Phi, nu):
+    # first sample Sigma from inverse-wishart
+    Sigma = invwishart.rvs(df=nu.item(), scale=Phi)
+    # second sample A from matrix-normal
+    A = matrix_normal.rvs(mean=M, rowcov=Sigma, colcov=K)
+    return A, Sigma
 
 
 class MatrixNormalInverseWishart(ExpDistribution):
@@ -48,6 +58,14 @@ class MatrixNormalInverseWishart(ExpDistribution):
 
         return E_T2, E_T3, E_T4, E_T1
 
+    def expected_standard_params(self):
+        J22, J12, J11, _ = self.expected_stats()
+        J22 = -2 * J22
+        J12 = -1 * J12.T
+        A = -1 * torch.linalg.solve(J22, J12).T
+        Q = torch.linalg.inv(J22)
+        return A, Q
+
     def logZ(self):
         K, M, Phi, nu = self.natural_to_standard()
         p, _ = Phi.shape
@@ -75,3 +93,7 @@ class MatrixNormalInverseWishart(ExpDistribution):
         M = torch.matmul(K, B).T
         Phi = C - torch.matmul(M, B)
         return K, M, Phi, nu
+
+    def sample(self):
+        K, M, Phi, nu = self.natural_to_standard()
+        return sample(M, K, Phi, nu)
