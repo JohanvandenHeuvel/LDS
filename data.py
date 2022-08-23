@@ -2,37 +2,29 @@ import matplotlib.pyplot as plt
 import torch
 
 
-def rot(theta):
-    s = torch.sin(theta)
-    c = torch.cos(theta)
-    return torch.stack([torch.stack([c, -s]), torch.stack([s, c])])
-
-
 def generate_data(A, Q, C, R, T):
     P, N = C.shape
-
     x = [torch.randn(N)]
     for t in range(T - 1):
         old_x = x[t]
         new_x = A @ old_x + Q @ torch.randn(N)
         x.append(new_x)
-
     x = torch.stack(x)
-
     y = x @ C.T + torch.randn(T, P) @ R.T
-
     return x, y
 
 
 def data_params():
-    # size parameters
-    N = 2
+    def rot(theta):
+        s = torch.sin(theta)
+        c = torch.cos(theta)
+        return torch.stack([torch.stack([c, -s]), torch.stack([s, c])])
 
+    N = 2  # size parameter
     A = 0.999 * rot(torch.tensor(2 * torch.pi / 30))
     Q = 0.1 * torch.eye(N)
     C = torch.eye(N)
     R = 0.0001 * torch.eye(N)
-
     return A, Q, C, R
 
 
