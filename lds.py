@@ -1,4 +1,5 @@
 import torch
+import numpy as np
 
 from distributions.gaussian import info_to_standard, Gaussian, info_to_natural
 
@@ -71,7 +72,7 @@ def info_rst_smoothing(J, h, cond_msg, pred_msg, pair_params, loc_next):
 def process_expected_stats(expected_stats):
     def make_init_stats(a):
         E_x, E_xxT, _ = a
-        return E_xxT, E_x, 1.0, 1.0
+        return E_xxT, E_x, torch.tensor(1.0), torch.tensor(1.0)
 
     def make_pair_stats(a, b):
         E_x, E_xxT, E_xnxT = a
@@ -133,7 +134,7 @@ def info_sample_backward(forward_messages, pair_params):
         next_sample = state.rsample()
         samples.append(next_sample)
 
-    return list(reversed(samples))
+    return torch.stack(list(reversed(samples)))
 
 
 def info_observation_params(obs, C, R):
@@ -146,7 +147,7 @@ def info_observation_params(obs, C, R):
     h_obs = obs @ R_inv_C
 
     J_obs = J_obs.unsqueeze(0).repeat(len(obs), 1, 1)
-    return zip(J_obs, h_obs)
+    return zip(J_obs, h_obs.squeeze())
 
 
 def info_pair_params(A, Q):
@@ -160,15 +161,15 @@ def sample_forward_messages(messages):
     samples = []
     for _, (J, h) in messages:
         loc, scale = info_to_standard(J, h)
-        x = loc + scale @ torch.randn(1)
+        x = loc + scale @ torch.randn(len(scale))
         samples.append(x.detach().numpy())
-    return samples
+    return np.stack(samples)
 
 
 def sample_backward_messages(messages):
     samples = []
     for (J, h) in messages:
         loc, scale = info_to_standard(J, h)
-        x = loc + scale @ torch.randn(1)
+        x = loc + scale @ torch.randn(len(scale))
         samples.append(x.detach().numpy())
-    return samples
+    return np.stack(samples)

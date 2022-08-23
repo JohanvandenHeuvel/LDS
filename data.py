@@ -1,38 +1,42 @@
 import matplotlib.pyplot as plt
 import torch
 
-from distributions import Gaussian
-from distributions.gaussian import standard_to_natural
 
-A = torch.diag(torch.ones(1))
-Q = torch.diag(torch.ones(1))
-C = torch.diag(torch.ones(1))
-R = torch.diag(torch.ones(1))
+def rot(theta):
+    s = torch.sin(theta)
+    c = torch.cos(theta)
+    return torch.stack([torch.stack([c, -s]), torch.stack([s, c])])
 
 
-def generate_data(n, noise_scale=1e-1):
-    init_params = standard_to_natural(
-        loc=torch.ones(1).unsqueeze(0) * 4,
-        scale=torch.diag(torch.ones(1) * noise_scale).unsqueeze(0),
-    )
-    x_1 = Gaussian(nat_param=init_params).rsample()
+def generate_data(A, Q, C, R, T):
 
-    x = [x_1]
-    y = []
-    for i in range(n):
-        old_x = x[i]
+    P, N = C.shape
 
-        new_x = A @ old_x + Q @ torch.randn(1) * noise_scale
-        new_y = C @ old_x + R @ torch.randn(1) * noise_scale
-
+    x = [torch.randn(N)]
+    for t in range(T - 1):
+        old_x = x[t]
+        new_x = A @ old_x + Q @ torch.randn(N)
         x.append(new_x)
-        y.append(new_y)
 
-    return torch.stack(x[:100]).squeeze(), torch.stack(y).squeeze()
+    x = torch.stack(x)
+
+    y = x @ C.T + torch.randn(T, P) @ R.T
+
+    return x, y
 
 
 if __name__ == "__main__":
-    x, y = generate_data(100, noise_scale=1e-2)
+
+    # size parameters
+    N = 2
+    T = 900
+
+    A = 0.999 * rot(torch.tensor(2 * torch.pi / 30))
+    Q = 0.1 * torch.eye(N)
+    C = torch.eye(N)
+    R = 0.0001 * torch.eye(N)
+
+    x, y = generate_data(A, Q, C, R, T)
 
     plt.plot(x.detach().numpy())
     plt.xlabel("x1")
