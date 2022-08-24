@@ -239,7 +239,7 @@ def run_iter(y, param, param_prior):
     """
     T = len(samples)
     nat_grad_init = natural_gradient(
-        pack_dense(*E_init_stats), niw_param, niw_prior, T, 1
+        pack_dense(*E_init_stats)[None, ...], niw_param, niw_prior, T, 1
     )
     niw_param = gradient_descent(niw_param, torch.stack(nat_grad_init), step_size=1e-1)
 
